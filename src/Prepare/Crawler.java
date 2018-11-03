@@ -1,4 +1,4 @@
-package Step3;
+package Prepare;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -18,92 +18,20 @@ import org.jsoup.safety.*;
 import org.jsoup.select.*;
 
 public class Crawler {
-	private static Map<String, Integer> urls;
-	private static ArrayList<String> array;
-	private static Database database;
-	private static TCPConnection tcpconnection;
-	private static int port = 9999;
-	private static int finish = 0;
-
-	public static void main(String[] args) {
-		String url = "http://uic.edu.hk/en";
-		database = new Database();
-		// String url = "http://p.uic.edu.hk";
-
-		// Create a HashMap to record all the urls need te be parsed
-		// array store all the links need to be paresd
-		// urls store wheter the a url is paresd or not
-		urls = new HashMap<String, Integer>();
-		array = new ArrayList<String>();
-
-		tcpconnection = new TCPConnection(port);
-		tcpconnection.start();
-
-		long startTime = System.currentTimeMillis();
-		int i = 0;
-		String ao;
-		// array.size()
-
-		if (Math.abs(url.hashCode() % 2) == tcpconnection.getMyname()) {
-			// Parsed is 1 unparsed is 0
-			System.out.println("uic link hash code is: " + Math.abs(url.hashCode() % 2));
-//			urls.put(url, 0);
-//			database.insertLink(url, "uic");
-//			// iterator = urls.entrySet().iterator();
-//			array.add(url);
-			try {
-				System.out.println("waiting");
-				Thread.sleep(1000);
-				System.out.println("waiting end");
-			} catch (Exception e) {
-				System.exit(0);// 退出程序
-			}
-		} else {
-			tcpconnection.send(url);
-			
-			try {
-				System.out.println("waiting");
-				Thread.sleep(10000);
-				System.out.println("waiting end");
-			} catch (Exception e) {
-				System.exit(0);// 退出程序
-			}
-		}
-
-		// tcpconnection.run();
-
-		while (finish == 0 || tcpconnection.getFfinish() == 0){
-			while (i < array.size()) {
-				if (finish==1) {
-					finish = 0;
-					tcpconnection.send("0");
-				}
-				ao = array.get(i);
-				if (urls.get(ao) == 1) {
-					continue;
-				} else {
-					crwaling(ao);
-					urls.put(ao, 1);
-				}
-
-				i++;
-//				System.out
-//						.println("The " + i + " times paresd; " + "URLS size is " + urls.size() + " \n Parsing: " + ao);
-				// System.out.println("****************************************\n");
-			}
-			finish = 1;
-			tcpconnection.send("1");
-
-		}
-		long endTime = System.currentTimeMillis();
-		System.out.println((endTime - startTime) / 100 + " seconds");
-
-		//tcpconnection.close();
-		System.out.println("main is finished");
+	private Map<String, Integer> urls;
+	private ArrayList<String> array;
+	private Database database;
+	private TCPConnection tcpconnection;
+	private int finish = 0;
+	
+	Crawler(Map<String, Integer> urls, ArrayList<String> array, Database database){
+		this.urls = urls;
+		this.array = array;
+		this.database = database;
+		
 	}
-
-	public static void crwaling(String url) {
-
+	
+	public void crwaling(String url) {
 		// print("Fetching %s ...", url);
 
 		try {
@@ -112,14 +40,15 @@ public class Crawler {
 
 			// print("Links: (%d)", links.size());
 			for (Element link : links) {
-				if (Math.abs(link.hashCode() % 2) == tcpconnection.getMyname()) {
+				
+				if (Math.abs(link.hashCode() % tcpconnection.getDistributedSize()) == tcpconnection.getMyname()) {
 					// if the hashcode is myname
 					manageURL(link.attr("abs:href"), link.text());
 				} else {
 					// if the hashcode belongs to friends
 					// !! need to be done
 					// should send the keywords?
-					tcpconnection.send(link.attr("abs:href"));
+					tcpconnection.send(link.attr("abs:href"),Math.abs(link.hashCode() % tcpconnection.getDistributedSize()));
 				}
 
 			}
@@ -131,11 +60,11 @@ public class Crawler {
 		}
 	}
 
-	private static void print(String msg, Object... args) {
+	private void print(String msg, Object... args) {
 		System.out.println(String.format(msg, args));
 	}
 
-	private static String trim(String s, int width) {
+	private String trim(String s, int width) {
 		if (s.length() > width)
 			return s.substring(0, width - 1) + ".";
 		else
@@ -148,8 +77,7 @@ public class Crawler {
 	// -1 means this url is meaningless, not in and do not need in urls and
 	// array
 	// synchronized to make sure at one time only one change
-	public synchronized static int manageURL(String url, String keywords) {
-
+	public synchronized int manageURL(String url, String keywords) {
 		if (urls.containsKey(url)) {
 			// If the link this time discoverd is already in urls,
 			// Check the keyword if need to be stored
@@ -157,7 +85,6 @@ public class Crawler {
 			if (keyword != null && !keyword.contains(keywords)) {
 				database.insertKeyword(url, keywords);
 			}
-
 			return 0;
 
 		} else {
@@ -175,8 +102,12 @@ public class Crawler {
 			return -1;
 		}
 	}
+	
+	public void setTCPConnection(TCPConnection tcpconnection) {
+		this.tcpconnection = tcpconnection;
+	}
 
-	private static boolean validURL(String url) {
+	private boolean validURL(String url) {
 		if (url.equals("") || url.contains("/cn") || url.contains(".cn/") || url.contains("download=")
 				|| url.startsWith("mailto:") || url.contains("facebook") || url.endsWith(".jpg") || url.contains(".JPG")
 				|| url.contains(".JPEG") || url.endsWith(".jpeg") || url.endsWith(".jpg") || url.contains("demo.")
